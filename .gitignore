@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# MRI datasets
+data/raw/
+data/processed/
+data/partitions/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
