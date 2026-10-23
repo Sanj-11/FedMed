@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package fedmed.communication.v1;
+
+// Communication contract between the central server and hospital clients.
+service FederatedCommunication {
+  // Registers a hospital client with the server.
+  rpc RegisterHospital(RegisterHospitalRequest)
+      returns (RegisterHospitalResponse);
+
+  // Retrieves instructions for a federated training round.
+  rpc GetTrainingInstructions(TrainingInstructionsRequest)
+      returns (TrainingInstructionsResponse);
+
+  // Submits a hospital's model update for aggregation.
+  rpc SubmitModelUpdate(ModelUpdateRequest)
+      returns (ModelUpdateResponse);
+}
+
+message RegisterHospitalRequest {
+  string hospital_id = 1;
+}
+
+message RegisterHospitalResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message TrainingInstructionsRequest {
+  string hospital_id = 1;
+}
+
+message TrainingInstructionsResponse {
+  bool training_available = 1;
+  string round_id = 2;
+  string model_version = 3;
+}
+
+message ModelUpdateRequest {
+  string hospital_id = 1;
+  string round_id = 2;
+  bytes model_update = 3;
+  uint64 num_examples = 4;
+}
+
+message ModelUpdateResponse {
+  bool accepted = 1;
+  string message = 2;
+}
