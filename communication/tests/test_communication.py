@@ -70,7 +70,74 @@ def test_submit_model_update_zero_examples():
                 timeout=5,
             )
 
-        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT       
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT    
+
+
+def test_submit_model_update_empty_payload():
+    with grpc.insecure_channel("127.0.0.1:50051") as channel:
+        stub = hospital_pb2_grpc.FederatedCommunicationStub(channel)
+
+        with pytest.raises(grpc.RpcError) as exc:
+            stub.SubmitModelUpdate(
+                hospital_pb2.ModelUpdateRequest(
+                    hospital_id="hospital_test_pytest",
+                    round_id="round_pytest_003",
+                    model_update=b"",
+                    num_examples=10,
+                ),
+                timeout=5,
+            )
+
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT    
+
+
+def test_submit_model_update_empty_hospital_id():
+    with grpc.insecure_channel("127.0.0.1:50051") as channel:
+        stub = hospital_pb2_grpc.FederatedCommunicationStub(channel)
+
+        with pytest.raises(grpc.RpcError) as exc:
+            stub.SubmitModelUpdate(
+                hospital_pb2.ModelUpdateRequest(
+                    hospital_id="",
+                    round_id="round_pytest_004",
+                    model_update=b"test_model_update",
+                    num_examples=10,
+                ),
+                timeout=5,
+            )
+
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT      
+
+
+def test_submit_model_update_empty_round_id():
+    with grpc.insecure_channel("127.0.0.1:50051") as channel:
+        stub = hospital_pb2_grpc.FederatedCommunicationStub(channel)
+        with pytest.raises(grpc.RpcError) as exc:
+            stub.SubmitModelUpdate(
+                hospital_pb2.ModelUpdateRequest(
+                    hospital_id="hospital_test_pytest",
+                    round_id="",
+                    model_update=b"test_model_update",
+                    num_examples=10,
+                ),
+                timeout=5,
+            )
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT   
+
+
+def test_get_training_instructions_empty_hospital_id():
+    with grpc.insecure_channel("127.0.0.1:50051") as channel:
+        stub = hospital_pb2_grpc.FederatedCommunicationStub(channel)
+        with pytest.raises(grpc.RpcError) as exc:
+            stub.GetTrainingInstructions(
+                hospital_pb2.TrainingInstructionsRequest(
+                    hospital_id=""
+                ),
+                timeout=5,
+            )
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT         
+
+                  
 
 
 
