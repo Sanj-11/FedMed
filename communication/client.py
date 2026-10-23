@@ -20,6 +20,23 @@ def main():
             print("Registration response received!")
             print(f"Accepted: {response.accepted}")
             print(f"Message: {response.message}")
+            
+            update_response = stub.SubmitModelUpdate(
+                hospital_pb2.ModelUpdateRequest(
+                    hospital_id="hospital_test_01",
+                    round_id="round_001",
+                    model_update=b"test_model_update",
+                    num_examples=10,
+                ),
+                timeout=5,
+            )
+
+            print("\nModel update response received!")
+            print(f"Accepted: {update_response.accepted}")
+            print(f"Message: {update_response.message}")
+
+
+
 
         except grpc.RpcError as error:
             print(f"gRPC error: {error.code().name}")

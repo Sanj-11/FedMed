@@ -65,11 +65,19 @@ class FederatedCommunicationService(
                 "num_examples must be greater than zero",
             )
 
-        # Placeholder: validation and forwarding to the aggregation
-        # component will be added during integration.
+        # Accept the update for the current development stage.
+        logging.info(
+            "Model update received from hospital %s for round %s "
+            "with %s examples (%s bytes)",
+            request.hospital_id,
+            request.round_id,
+            request.num_examples,
+            len(request.model_update),
+        )
+
         return hospital_pb2.ModelUpdateResponse(
-            accepted=False,
-            message="Model update receiver is not integrated yet",
+            accepted=True,
+            message="Model update received successfully",
         )
 
 
