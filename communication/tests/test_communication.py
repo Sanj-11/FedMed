@@ -1,6 +1,7 @@
 import grpc
 import sys
 from pathlib import Path
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -38,3 +39,39 @@ def test_submit_model_update():
 
         assert response.accepted is True
         assert "successfully" in response.message.lower()
+
+def test_register_hospital_empty_id():
+    with grpc.insecure_channel("127.0.0.1:50051") as channel:
+        stub = hospital_pb2_grpc.FederatedCommunicationStub(channel)
+
+        with pytest.raises(grpc.RpcError) as exc:
+            stub.RegisterHospital(
+                hospital_pb2.RegisterHospitalRequest(
+                    hospital_id=""
+                ),
+                timeout=5,
+            )
+
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT    
+
+
+def test_submit_model_update_zero_examples():
+    with grpc.insecure_channel("127.0.0.1:50051") as channel:
+        stub = hospital_pb2_grpc.FederatedCommunicationStub(channel)
+
+        with pytest.raises(grpc.RpcError) as exc:
+            stub.SubmitModelUpdate(
+                hospital_pb2.ModelUpdateRequest(
+                    hospital_id="hospital_test_pytest",
+                    round_id="round_pytest_002",
+                    model_update=b"test_model_update",
+                    num_examples=0,
+                ),
+                timeout=5,
+            )
+
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT       
+
+
+
+       
