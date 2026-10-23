@@ -135,7 +135,25 @@ def test_get_training_instructions_empty_hospital_id():
                 ),
                 timeout=5,
             )
-        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT         
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT    
+
+
+def test_server_unavailable():
+    with grpc.insecure_channel("127.0.0.1:50099") as channel:
+        stub = hospital_pb2_grpc.FederatedCommunicationStub(channel)
+
+        with pytest.raises(grpc.RpcError) as exc:
+            stub.RegisterHospital(
+                hospital_pb2.RegisterHospitalRequest(
+                    hospital_id="hospital_unavailable_test"
+                ),
+                timeout=1,
+            )
+
+        assert exc.value.code() in (
+            grpc.StatusCode.UNAVAILABLE,
+            grpc.StatusCode.DEADLINE_EXCEEDED,
+        )             
 
                   
 
