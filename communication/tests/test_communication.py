@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import client
 
 import hospital_pb2
 import hospital_pb2_grpc
@@ -52,7 +53,7 @@ def test_register_hospital_empty_id():
                 timeout=5,
             )
 
-        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT    
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
 
 
 def test_submit_model_update_zero_examples():
@@ -70,7 +71,7 @@ def test_submit_model_update_zero_examples():
                 timeout=5,
             )
 
-        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT    
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
 
 
 def test_submit_model_update_empty_payload():
@@ -88,7 +89,7 @@ def test_submit_model_update_empty_payload():
                 timeout=5,
             )
 
-        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT    
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
 
 
 def test_submit_model_update_empty_hospital_id():
@@ -106,7 +107,7 @@ def test_submit_model_update_empty_hospital_id():
                 timeout=5,
             )
 
-        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT      
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
 
 
 def test_submit_model_update_empty_round_id():
@@ -122,7 +123,7 @@ def test_submit_model_update_empty_round_id():
                 ),
                 timeout=5,
             )
-        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT   
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
 
 
 def test_get_training_instructions_empty_hospital_id():
@@ -135,7 +136,7 @@ def test_get_training_instructions_empty_hospital_id():
                 ),
                 timeout=5,
             )
-        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT    
+        assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
 
 
 def test_server_unavailable():
@@ -153,10 +154,119 @@ def test_server_unavailable():
         assert exc.value.code() in (
             grpc.StatusCode.UNAVAILABLE,
             grpc.StatusCode.DEADLINE_EXCEEDED,
-        )             
-
-                  
+        )
 
 
+def test_request_timeout_uses_default_when_unset(monkeypatch):
+    monkeypatch.delenv("FEDMED_REQUEST_TIMEOUT", raising=False)
 
-       
+    assert client.get_request_timeout() == 5.0
+
+
+def test_request_timeout_reads_valid_environment_value(monkeypatch):
+    monkeypatch.setenv("FEDMED_REQUEST_TIMEOUT", "2")
+
+    assert client.get_request_timeout() == 2.0
+
+
+def test_request_timeout_falls_back_when_invalid(monkeypatch):
+    monkeypatch.setenv("FEDMED_REQUEST_TIMEOUT", "abc")
+
+    assert client.get_request_timeout() == 5.0
+
+
+def test_request_timeout_falls_back_when_zero(monkeypatch):
+    monkeypatch.setenv("FEDMED_REQUEST_TIMEOUT", "0")
+
+    assert client.get_request_timeout() == 5.0
+
+
+def test_request_timeout_falls_back_when_negative(monkeypatch):
+    monkeypatch.setenv("FEDMED_REQUEST_TIMEOUT", "-3")
+
+    assert client.get_request_timeout() == 5.0
+
+
+def test_client_handles_registration_rpc_failure(monkeypatch, caplog):
+    class FakeRpcError(grpc.RpcError):
+        def code(self):
+            return grpc.StatusCode.UNAVAILABLE
+
+        def details(self):
+            return "Server unavailable"
+
+    class FakeStub:
+        def RegisterHospital(self, request, timeout):
+            raise FakeRpcError()
+
+    class FakeChannel:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    monkeypatch.setattr(
+        client.grpc,
+        "insecure_channel",
+        lambda address: FakeChannel(),
+    )
+    monkeypatch.setattr(
+        client.hospital_pb2_grpc,
+        "FederatedCommunicationStub",
+        lambda channel: FakeStub(),
+    )
+
+    client.main()
+
+    assert "Hospital registration failed" in caplog.text
+    assert "UNAVAILABLE" in caplog.text
+    assert "Server unavailable" in caplog.text
+
+
+def test_client_handles_model_update_rpc_failure(monkeypatch, caplog):
+    class FakeRpcError(grpc.RpcError):
+        def code(self):
+            return grpc.StatusCode.UNAVAILABLE
+
+        def details(self):
+            return "Server unavailable"
+
+    class FakeStub:
+        def RegisterHospital(self, request, timeout):
+            return hospital_pb2.RegisterHospitalResponse(
+                accepted=True,
+                message="Hospital registered",
+            )
+
+        def SubmitModelUpdate(self, request, timeout):
+            raise FakeRpcError()
+
+    class FakeChannel:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    monkeypatch.setattr(
+        client.grpc,
+        "insecure_channel",
+        lambda address: FakeChannel(),
+    )
+    monkeypatch.setattr(
+        client.hospital_pb2_grpc,
+        "FederatedCommunicationStub",
+        lambda channel: FakeStub(),
+    )
+
+    client.main()
+
+    assert "Model update submission failed" in caplog.text
+    assert "UNAVAILABLE" in caplog.text
+    assert "Server unavailable" in caplog.text
+
+
+
+
+
