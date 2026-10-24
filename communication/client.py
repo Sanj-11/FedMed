@@ -3,8 +3,9 @@ import os
 
 import grpc
 
-import hospital_pb2
-import hospital_pb2_grpc
+from communication import hospital_pb2
+from communication import hospital_pb2_grpc
+
 
 
 SERVER_ADDRESS = "127.0.0.1:50051"

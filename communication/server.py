@@ -3,8 +3,8 @@ import logging
 
 import grpc
 
-import hospital_pb2
-import hospital_pb2_grpc
+from communication import hospital_pb2
+from communication import hospital_pb2_grpc
 
 
 class FederatedCommunicationService(
