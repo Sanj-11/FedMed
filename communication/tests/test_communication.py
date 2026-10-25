@@ -74,6 +74,16 @@ def test_submit_model_update_zero_examples():
         assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
 
 
+def test_submit_model_update_negative_examples():
+    with pytest.raises(ValueError, match="out of range"):
+        hospital_pb2.ModelUpdateRequest(
+            hospital_id="hospital_test_pytest",
+            round_id="round_pytest_negative",
+            model_update=b"test_model_update",
+            num_examples=-1,
+        )
+
+
 def test_submit_model_update_empty_payload():
     with grpc.insecure_channel("127.0.0.1:50051") as channel:
         stub = hospital_pb2_grpc.FederatedCommunicationStub(channel)
@@ -185,6 +195,19 @@ def test_request_timeout_falls_back_when_negative(monkeypatch):
     monkeypatch.setenv("FEDMED_REQUEST_TIMEOUT", "-3")
 
     assert client.get_request_timeout() == 5.0
+
+
+def test_request_timeout_falls_back_when_infinite(monkeypatch):
+    monkeypatch.setenv("FEDMED_REQUEST_TIMEOUT", "inf")
+
+    assert client.get_request_timeout() == 5.0
+
+
+def test_request_timeout_falls_back_when_nan(monkeypatch):
+    monkeypatch.setenv("FEDMED_REQUEST_TIMEOUT", "nan")
+
+    assert client.get_request_timeout() == 5.0
+
 
 
 def test_client_handles_registration_rpc_failure(monkeypatch, caplog):

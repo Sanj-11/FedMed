@@ -78,14 +78,16 @@ class FederatedCommunicationService(
                 "model_update must not be empty",
             )
 
-        if request.num_examples == 0:
+        if request.num_examples <= 0:
             logging.warning(
-                "Rejected model update request: num_examples is zero"
+                "Rejected model update request: num_examples is not positive"
             )
             context.abort(
                 grpc.StatusCode.INVALID_ARGUMENT,
                 "num_examples must be greater than zero",
-            )
+            )    
+
+
 
         # Acknowledge the update for the current development stage.
         # This does not store or aggregate the model update.

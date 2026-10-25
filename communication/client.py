@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 
 import grpc
@@ -12,8 +13,10 @@ SERVER_ADDRESS = "127.0.0.1:50051"
 DEFAULT_REQUEST_TIMEOUT = 5.0
 
 
+
+
 def get_request_timeout():
-    """Return a valid positive RPC timeout from the environment."""
+    """Return a valid finite positive RPC timeout from the environment."""
     raw_timeout = os.getenv(
         "FEDMED_REQUEST_TIMEOUT",
         str(DEFAULT_REQUEST_TIMEOUT),
@@ -29,14 +32,45 @@ def get_request_timeout():
         )
         return DEFAULT_REQUEST_TIMEOUT
 
-    if timeout <= 0:
+    if not math.isfinite(timeout) or timeout <= 0:
         logging.warning(
-            "FEDMED_REQUEST_TIMEOUT must be positive; using %.1f seconds.",
+            "FEDMED_REQUEST_TIMEOUT must be finite and positive; "
+            "using %.1f seconds.",
             DEFAULT_REQUEST_TIMEOUT,
         )
         return DEFAULT_REQUEST_TIMEOUT
 
     return timeout
+
+
+
+def log_rpc_error(operation, error):
+    """Log an RPC failure with its status code and details."""
+    status_code = error.code().name
+    details = error.details()
+
+    if error.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
+        logging.error(
+            "%s failed: %s - %s. Check server load and request timeout settings.",
+            operation,
+            status_code,
+            details,
+        )
+    elif error.code() == grpc.StatusCode.UNAVAILABLE:
+        logging.error(
+            "%s failed: %s - %s. Check that the server is running and reachable.",
+            operation,
+            status_code,
+            details,
+        )
+    else:
+        logging.error(
+            "%s failed: %s - %s",
+            operation,
+            status_code,
+            details,
+        )
+
 
 
 def main():
@@ -64,12 +98,10 @@ def main():
                 print(f"Message: {response.message}")
 
             except grpc.RpcError as error:
-                logging.error(
-                    "Hospital registration failed: %s - %s",
-                    error.code().name,
-                    error.details(),
-                )
-                return
+                log_rpc_error("Hospital registration", error)
+                return    
+
+                               
 
             try:
                 update_response = stub.SubmitModelUpdate(
@@ -87,11 +119,7 @@ def main():
                 print(f"Message: {update_response.message}")
 
             except grpc.RpcError as error:
-                logging.error(
-                    "Model update submission failed: %s - %s",
-                    error.code().name,
-                    error.details(),
-                )
+                log_rpc_error("Model update submission", error)
 
     except (grpc.RpcError, OSError) as error:
         logging.error("Could not communicate with the server: %s", error)
