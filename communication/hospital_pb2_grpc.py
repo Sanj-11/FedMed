@@ -3,9 +3,9 @@
 import grpc
 import warnings
 
-import hospital_pb2 as hospital__pb2
+from communication import hospital_pb2 as hospital__pb2
 
-GRPC_GENERATED_VERSION = '1.84.1'
+GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class FederatedCommunicationStub:
+class FederatedCommunicationStub(object):
     """Communication contract between the central server and hospital clients.
     """
 
@@ -52,7 +52,7 @@ class FederatedCommunicationStub:
                 _registered_method=True)
 
 
-class FederatedCommunicationServicer:
+class FederatedCommunicationServicer(object):
     """Communication contract between the central server and hospital clients.
     """
 
@@ -103,7 +103,7 @@ def add_FederatedCommunicationServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class FederatedCommunication:
+class FederatedCommunication(object):
     """Communication contract between the central server and hospital clients.
     """
 
