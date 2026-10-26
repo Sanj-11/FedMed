@@ -6,6 +6,8 @@ import grpc
 
 from communication import hospital_pb2
 from communication import hospital_pb2_grpc
+from model.network import SmallSegmentationModel
+from model.model.serialization import serialize_model_parameters
 
 
 
@@ -102,14 +104,15 @@ def main():
                 return    
 
                                
-
+            model = SmallSegmentationModel()
+            model_update = serialize_model_parameters(model)
             try:
                 update_response = stub.SubmitModelUpdate(
                     hospital_pb2.ModelUpdateRequest(
-                        hospital_id="hospital_test_01",
-                        round_id="round_001",
-                        model_update=b"test_model_update",
-                        num_examples=10,
+                         hospital_id="hospital_test_01",
+                         round_id="round_001",
+                         model_update=model_update,
+                         num_examples=10,
                     ),
                     timeout=request_timeout,
                 )

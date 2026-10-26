@@ -3,6 +3,11 @@ import sys
 from pathlib import Path
 import pytest
 
+import io
+import torch
+
+
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import client
 
@@ -288,6 +293,110 @@ def test_client_handles_model_update_rpc_failure(monkeypatch, caplog):
     assert "Model update submission failed" in caplog.text
     assert "UNAVAILABLE" in caplog.text
     assert "Server unavailable" in caplog.text
+
+
+def test_server_stores_first_update_without_aggregating():
+    from communication.server import FederatedCommunicationService
+    import io
+    import torch
+    from unittest.mock import Mock
+
+    service = FederatedCommunicationService()
+    context = Mock()
+
+    buffer = io.BytesIO()
+    torch.save(
+        {"weight": torch.tensor([1.0, 3.0])},
+        buffer,
+    )
+
+    request = hospital_pb2.ModelUpdateRequest(
+        hospital_id="hospital_1",
+        round_id="round_test",
+        model_update=buffer.getvalue(),
+        num_examples=1,
+    )
+
+    response = service.SubmitModelUpdate(request, context)
+
+    assert response.accepted is True
+    assert "hospital_1" in service.round_updates["round_test"]
+    assert "round_test" not in service.aggregated_rounds  
+
+
+def test_server_aggregates_after_second_hospital():
+    import io
+    import torch
+    from unittest.mock import Mock
+    from communication.server import FederatedCommunicationService
+
+    service = FederatedCommunicationService()
+    context = Mock()
+
+    def make_request(hospital_id, weights, num_examples):
+        buffer = io.BytesIO()
+        torch.save(
+            {"weight": torch.tensor(weights)},
+            buffer,
+        )
+        return hospital_pb2.ModelUpdateRequest(
+            hospital_id=hospital_id,
+            round_id="round_aggregate_test",
+            model_update=buffer.getvalue(),
+            num_examples=num_examples,
+        )
+
+    first = make_request("hospital_1", [1.0, 3.0], 1)
+    second = make_request("hospital_2", [5.0, 7.0], 3)
+
+    response1 = service.SubmitModelUpdate(first, context)
+
+    assert response1.accepted is True
+    assert "round_aggregate_test" not in service.aggregated_rounds
+
+    response2 = service.SubmitModelUpdate(second, context)
+
+    assert response2.accepted is True
+    assert (
+        service.aggregated_rounds["round_aggregate_test"][0].tolist()
+        == [4.0, 6.0]
+    )      
+
+
+def test_server_rejects_duplicate_hospital_update():
+    import io
+    import torch
+    import grpc
+    import pytest
+    from unittest.mock import Mock
+    from communication.server import FederatedCommunicationService
+
+    service = FederatedCommunicationService()
+    context = Mock()
+
+    buffer = io.BytesIO()
+    torch.save({"weight": torch.tensor([1.0, 3.0])}, buffer)
+
+    request = hospital_pb2.ModelUpdateRequest(
+        hospital_id="hospital_duplicate",
+        round_id="round_duplicate_test",
+        model_update=buffer.getvalue(),
+        num_examples=2,
+    )
+
+    first_response = service.SubmitModelUpdate(request, context)
+    assert first_response.accepted is True
+
+    context.reset_mock()
+    context.abort.side_effect = grpc.RpcError("Duplicate submission")
+
+    with pytest.raises(grpc.RpcError, match="Duplicate submission"):
+        service.SubmitModelUpdate(request, context)
+
+    context.abort.assert_called_once_with(
+        grpc.StatusCode.ALREADY_EXISTS,
+        "This hospital has already submitted an update for this round",
+    )    
 
 
 
