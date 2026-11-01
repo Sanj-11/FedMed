@@ -79,4 +79,4 @@ def aggregate_hospital_updates(
             # Integer buffers (for example, batch counters) cannot be averaged.
             result[key] = reference_tensor.clone()
 
-    return result
+    return result  
