@@ -1,5 +1,5 @@
 import torch
-import flwr as fl
+import numpy as np
 
 from model.network import SmallSegmentationModel
 from model.train import train_one_step
@@ -17,82 +17,104 @@ def create_hospital_data(seed: int):
     return images, masks
 
 
-class HospitalClient(fl.client.NumPyClient):
+class HospitalClient:
     def __init__(self, hospital_id: int):
         self.hospital_id = hospital_id
         self.model = SmallSegmentationModel()
         self.images, self.masks = create_hospital_data(hospital_id)
 
-    def get_parameters(self, config):
-        return get_model_parameters(self.model)
+    def fit(self, global_parameters):
+        set_model_parameters(self.model, global_parameters)
 
-    def fit(self, parameters, config):
-        set_model_parameters(self.model, parameters)
-        loss = train_one_step(self.model, self.images, self.masks)
+        loss = train_one_step(
+            self.model, self.images, self.masks
+        )
+
         print(
             f"Hospital {self.hospital_id}: "
             f"training loss = {loss:.4f}"
         )
-        return get_model_parameters(self.model), len(self.images), {"loss": loss}
 
-    def evaluate(self, parameters, config):
-        set_model_parameters(self.model, parameters)
+        return (
+            get_model_parameters(self.model),
+            len(self.images),
+            loss
+        )
+
+    def evaluate(self, global_parameters):
+        set_model_parameters(self.model, global_parameters)
         self.model.eval()
+
         with torch.no_grad():
             predictions = self.model(self.images)
             loss = torch.nn.functional.cross_entropy(
                 predictions, self.masks.long()
             )
-        return float(loss.item()), len(self.images), {
-            "hospital_id": self.hospital_id
-        }
+
+        return float(loss.item())
 
 
-def client_fn(context: fl.common.Context):
-    hospital_id = int(context.node_config["partition-id"])
-    return HospitalClient(hospital_id).to_client()
+def fedavg(updates):
+    """Aggregate hospital parameters using sample-weighted FedAvg."""
+    total_samples = sum(num_samples for _, num_samples, _ in updates)
 
+    aggregated = []
 
-def server_fn(context: fl.common.Context):
-    initial_model = SmallSegmentationModel()
-    initial_parameters = fl.common.ndarrays_to_parameters(
-        get_model_parameters(initial_model)
-    )
+    for parameter_group in zip(*(params for params, _, _ in updates)):
+        weighted_parameter = sum(
+            parameter * num_samples
+            for parameter, (_, num_samples, _) in zip(
+                parameter_group, updates
+            )
+        ) / total_samples
 
-    strategy = fl.server.strategy.FedAvg(
-        fraction_fit=1.0,
-        fraction_evaluate=1.0,
-        min_fit_clients=NUM_HOSPITALS,
-        min_evaluate_clients=NUM_HOSPITALS,
-        min_available_clients=NUM_HOSPITALS,
-        initial_parameters=initial_parameters,
-    )
+        aggregated.append(weighted_parameter)
 
-    config = fl.server.ServerConfig(num_rounds=NUM_ROUNDS)
-    return fl.server.ServerAppComponents(
-        strategy=strategy,
-        config=config,
-    )
+    return aggregated
 
 
 def main():
     torch.manual_seed(42)
+    np.random.seed(42)
 
-    server_app = fl.server.ServerApp(server_fn=server_fn)
-    client_app = fl.client.ClientApp(client_fn=client_fn)
+    clients = [
+        HospitalClient(i) for i in range(NUM_HOSPITALS)
+    ]
 
-    print("Starting FEDMED federated-learning simulation...")
+    global_model = SmallSegmentationModel()
+    global_parameters = get_model_parameters(global_model)
+
+    print("\nStarting FEDMED local federated-learning simulation...")
     print(f"Simulated hospitals: {NUM_HOSPITALS}")
     print(f"Federated rounds: {NUM_ROUNDS}")
 
-    fl.simulation.run_simulation(
-        server_app=server_app,
-        client_app=client_app,
-        num_supernodes=NUM_HOSPITALS,
-        backend_config={"client_resources": {"num_cpus": 1}},
-    )
+    for round_number in range(1, NUM_ROUNDS + 1):
+        print(f"\n========== ROUND {round_number} ==========")
 
-    print("Federated-learning simulation completed.")
+        updates = []
+
+        for client in clients:
+            update = client.fit(global_parameters)
+            updates.append(update)
+
+        global_parameters = fedavg(updates)
+        set_model_parameters(global_model, global_parameters)
+
+        print("Global model aggregation completed.")
+
+        evaluation_losses = [
+            client.evaluate(global_parameters)
+            for client in clients
+        ]
+
+        average_loss = sum(evaluation_losses) / len(evaluation_losses)
+
+        print(
+            f"Round {round_number} average evaluation loss: "
+            f"{average_loss:.4f}"
+        )
+
+    print("\nFEDMED federated-learning simulation completed successfully.")
 
 
 if __name__ == "__main__":
